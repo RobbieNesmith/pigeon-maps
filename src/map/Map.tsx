@@ -16,6 +16,7 @@ import {
   WRem,
 } from '../types'
 import { osm } from '../providers'
+import webMercator from 'crs/webMercator'
 
 const ANIMATION_TIME = 300
 const DIAGONAL_THROW_TIME = 1500
@@ -29,21 +30,6 @@ const WARNING_DISPLAY_TIMEOUT = 300
 
 const NOOP = () => true
 
-// https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-const lng2tile = (lon: number, zoom: number): number => ((lon + 180) / 360) * Math.pow(2, zoom)
-const lat2tile = (lat: number, zoom: number): number =>
-  ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
-  Math.pow(2, zoom)
-
-function tile2lng(x: number, z: number): number {
-  return (x / Math.pow(2, z)) * 360 - 180
-}
-
-function tile2lat(y: number, z: number): number {
-  const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z)
-  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
-}
-
 function getMousePixel(dom: HTMLElement, event: Pick<MouseEvent, 'clientX' | 'clientY'>): Point {
   const parent = parentPosition(dom)
   return [event.clientX - parent.x, event.clientY - parent.y]
@@ -52,14 +38,6 @@ function getMousePixel(dom: HTMLElement, event: Pick<MouseEvent, 'clientX' | 'cl
 function easeOutQuad(t: number): number {
   return t * (2 - t)
 }
-
-// minLat, maxLat, minLng, maxLng
-const absoluteMinMax = [
-  tile2lat(Math.pow(2, 10), 10),
-  tile2lat(0, 10),
-  tile2lng(0, 10),
-  tile2lng(Math.pow(2, 10), 10),
-] as MinMaxBounds
 
 const hasWindow = typeof window !== 'undefined'
 
@@ -132,6 +110,7 @@ export class Map extends Component<MapProps, MapReactState> {
     limitBounds: 'center',
     dprs: [],
     tileComponent: ImgTile,
+    crs: webMercator,
   }
 
   _containerRef?: HTMLDivElement
@@ -537,7 +516,7 @@ export class Map extends Component<MapProps, MapReactState> {
 
   getBoundsMinMax = (zoom: number): MinMaxBounds => {
     if (this.props.limitBounds === 'center') {
-      return absoluteMinMax
+      return this.props.crs.absoluteMinMax
     }
 
     const { width, height } = this.state
@@ -553,11 +532,11 @@ export class Map extends Component<MapProps, MapReactState> {
 
     const pixelsAtZoom = Math.pow(2, zoom) * 256
 
-    const minLng = width > pixelsAtZoom ? 0 : tile2lng(width / 512, zoom) // x
-    const minLat = height > pixelsAtZoom ? 0 : tile2lat(Math.pow(2, zoom) - height / 512, zoom) // y
+    const minLng = width > pixelsAtZoom ? 0 : this.props.crs.tile2lng(width / 512, zoom) // x
+    const minLat = height > pixelsAtZoom ? 0 : this.props.crs.tile2lat(Math.pow(2, zoom) - height / 512, zoom) // y
 
-    const maxLng = width > pixelsAtZoom ? 0 : tile2lng(Math.pow(2, zoom) - width / 512, zoom) // x
-    const maxLat = height > pixelsAtZoom ? 0 : tile2lat(height / 512, zoom) // y
+    const maxLng = width > pixelsAtZoom ? 0 : this.props.crs.tile2lng(Math.pow(2, zoom) - width / 512, zoom) // x
+    const maxLat = height > pixelsAtZoom ? 0 : this.props.crs.tile2lat(height / 512, zoom) // y
 
     const minMax = [minLat, maxLat, minLng, maxLng] as MinMaxBounds
 
@@ -887,8 +866,8 @@ export class Map extends Component<MapProps, MapReactState> {
 
         const throwTime = (DIAGONAL_THROW_TIME * distance) / diagonal
 
-        const lng = tile2lng(lng2tile(center[1], zoom) - delta[0] / 256.0, zoom)
-        const lat = tile2lat(lat2tile(center[0], zoom) - delta[1] / 256.0, zoom)
+        const lng = this.props.crs.tile2lng(this.props.crs.lng2tile(center[1], zoom) - delta[0] / 256.0, zoom)
+        const lat = this.props.crs.tile2lat(this.props.crs.lat2tile(center[0], zoom) - delta[1] / 256.0, zoom)
 
         this.setCenterZoomTarget([lat, lng], zoom, false, null, throwTime)
       }
@@ -904,8 +883,8 @@ export class Map extends Component<MapProps, MapReactState> {
     let lng = center[1]
 
     if (pixelDelta || zoomDelta !== 0) {
-      lng = tile2lng(lng2tile(center[1], zoom + zoomDelta) - (pixelDelta ? pixelDelta[0] / 256.0 : 0), zoom + zoomDelta)
-      lat = tile2lat(lat2tile(center[0], zoom + zoomDelta) - (pixelDelta ? pixelDelta[1] / 256.0 : 0), zoom + zoomDelta)
+      lng = this.props.crs.tile2lng(this.props.crs.lng2tile(center[1], zoom + zoomDelta) - (pixelDelta ? pixelDelta[0] / 256.0 : 0), zoom + zoomDelta)
+      lat = this.props.crs.tile2lat(this.props.crs.lat2tile(center[0], zoom + zoomDelta) - (pixelDelta ? pixelDelta[1] / 256.0 : 0), zoom + zoomDelta)
       this.setCenterZoom([lat, lng], zoom + zoomDelta)
     }
 
@@ -1021,37 +1000,9 @@ export class Map extends Component<MapProps, MapReactState> {
     return this.state.zoom + this.state.zoomDelta
   }
 
-  pixelToLatLng = (pixel: Point, center = this.state.center, zoom = this.zoomPlusDelta()): Point => {
-    const { width, height, pixelDelta } = this.state
+  pixelToLatLng = (pixel: Point, center = this.state.center, zoom = this.zoomPlusDelta()) => this.props.crs.pixelToLatLng(pixel, center, zoom, this.state.width, this.state.height, this.state.pixelDelta)
 
-    const pointDiff = [
-      (pixel[0] - width / 2 - (pixelDelta ? pixelDelta[0] : 0)) / 256.0,
-      (pixel[1] - height / 2 - (pixelDelta ? pixelDelta[1] : 0)) / 256.0,
-    ]
-
-    const tileX = lng2tile(center[1], zoom) + pointDiff[0]
-    const tileY = lat2tile(center[0], zoom) + pointDiff[1]
-
-    return [
-      Math.max(absoluteMinMax[0], Math.min(absoluteMinMax[1], tile2lat(tileY, zoom))),
-      Math.max(absoluteMinMax[2], Math.min(absoluteMinMax[3], tile2lng(tileX, zoom))),
-    ] as Point
-  }
-
-  latLngToPixel = (latLng: Point, center = this.state.center, zoom = this.zoomPlusDelta()): Point => {
-    const { width, height, pixelDelta } = this.state
-
-    const tileCenterX = lng2tile(center[1], zoom)
-    const tileCenterY = lat2tile(center[0], zoom)
-
-    const tileX = lng2tile(latLng[1], zoom)
-    const tileY = lat2tile(latLng[0], zoom)
-
-    return [
-      (tileX - tileCenterX) * 256.0 + width / 2 + (pixelDelta ? pixelDelta[0] : 0),
-      (tileY - tileCenterY) * 256.0 + height / 2 + (pixelDelta ? pixelDelta[1] : 0),
-    ] as Point
-  }
+  latLngToPixel = (latLng: Point, center = this.state.center, zoom = this.zoomPlusDelta()) => this.props.crs.latLngToPixel(latLng, center, zoom, this.state.width, this.state.height, this.state.pixelDelta)
 
   calculateZoomCenter = (center: Point, coords: Point, oldZoom: number, newZoom: number): Point => {
     const { width, height } = this.state
@@ -1098,8 +1049,8 @@ export class Map extends Component<MapProps, MapReactState> {
     const scaleWidth = width / scale
     const scaleHeight = height / scale
 
-    const tileCenterX = lng2tile(center[1], roundedZoom) - (pixelDelta ? pixelDelta[0] / 256.0 / scale : 0)
-    const tileCenterY = lat2tile(center[0], roundedZoom) - (pixelDelta ? pixelDelta[1] / 256.0 / scale : 0)
+    const tileCenterX = this.props.crs.lng2tile(center[1], roundedZoom) - (pixelDelta ? pixelDelta[0] / 256.0 / scale : 0)
+    const tileCenterY = this.props.crs.lat2tile(center[0], roundedZoom) - (pixelDelta ? pixelDelta[1] / 256.0 / scale : 0)
 
     const halfWidth = scaleWidth / 2 / 256.0
     const halfHeight = scaleHeight / 2 / 256.0
