@@ -1110,10 +1110,10 @@ export class Map extends Component<MapProps, MapReactState> {
       const xDiff = -(tileMinX - old.tileMinX * pow) * 256
       const yDiff = -(tileMinY - old.tileMinY * pow) * 256
 
-      const xMin = Math.max(old.tileMinX, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], old.roundedZoom))
-      const yMin = Math.max(old.tileMinY, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], old.roundedZoom))
-      const xMax = Math.min(old.tileMaxX, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], old.roundedZoom) - 1)
-      const yMax = Math.min(old.tileMaxY, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], old.roundedZoom) - 1)
+      const xMin = Math.max(old.tileMinX, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], old.roundedZoom)))
+      const yMin = Math.max(old.tileMinY, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], old.roundedZoom)))
+      const xMax = Math.min(old.tileMaxX, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], old.roundedZoom)) - 1)
+      const yMax = Math.min(old.tileMaxY, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], old.roundedZoom)) - 1)
 
       for (let x = xMin; x <= xMax; x++) {
         for (let y = yMin; y <= yMax; y++) {
@@ -1131,10 +1131,10 @@ export class Map extends Component<MapProps, MapReactState> {
       }
     }
 
-    const xMin = Math.max(tileMinX, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], roundedZoom))
-    const yMin = Math.max(tileMinY, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], roundedZoom))
-    const xMax = Math.min(tileMaxX, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], roundedZoom) - 1)
-    const yMax = Math.min(tileMaxY, this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], roundedZoom) - 1)
+    const xMin = Math.max(tileMinX, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], roundedZoom)))
+    const yMin = Math.max(tileMinY, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], roundedZoom)))
+    const xMax = Math.min(tileMaxX, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], roundedZoom)) - 1)
+    const yMax = Math.min(tileMaxY, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], roundedZoom)) - 1)
 
     for (let x = xMin; x <= xMax; x++) {
       for (let y = yMin; y <= yMax; y++) {
