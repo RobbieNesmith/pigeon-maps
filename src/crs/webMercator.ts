@@ -1,27 +1,32 @@
 import { Crs, MinMaxBounds, Point } from "types"
 
 // https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-const lng2tile = (lon: number, zoom: number): number => ((lon + 180) / 360) * Math.pow(2, zoom)
-const lat2tile = (lat: number, zoom: number): number =>
-  ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
-  Math.pow(2, zoom)
 
-function tile2lng(x: number, z: number): number {
-  return (x / Math.pow(2, z)) * 360 - 180
+function latlng2tile(latLng: Point, zoom: number) {
+  const x = ((latLng[1] + 180) / 360) * Math.pow(2, zoom)
+  const y = ((1 - Math.log(Math.tan((latLng[0] * Math.PI) / 180) + 1 / Math.cos((latLng[0] * Math.PI) / 180)) / Math.PI) / 2) *
+    Math.pow(2, zoom)
+
+  return [x, y] as Point;
 }
 
-function tile2lat(y: number, z: number): number {
-  const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z)
-  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+function tile2latlng(tileCoords: Point, z: number) {
+  const n = Math.PI - (2 * Math.PI * tileCoords[1]) / Math.pow(2, z)
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+  const lng = (tileCoords[0] / Math.pow(2, z)) * 360 - 180
+
+  return [lat, lng] as Point;
 }
 
+const minLatLng = tile2latlng([0, 0], 10)
+const maxLatLng = tile2latlng([Math.pow(2, 10), Math.pow(2, 10)], 10)
 
 // minLat, maxLat, minLng, maxLng
 const absoluteMinMax = [
-  tile2lat(Math.pow(2, 10), 10),
-  tile2lat(0, 10),
-  tile2lng(0, 10),
-  tile2lng(Math.pow(2, 10), 10),
+  minLatLng[0],
+  maxLatLng[0],
+  minLatLng[1],
+  maxLatLng[1],
 ] as MinMaxBounds;
 
 const pixelToLatLng = (pixel: Point, center: Point, zoom: number, width: number, height: number, pixelDelta: [number, number]): Point => {
@@ -31,37 +36,33 @@ const pixelToLatLng = (pixel: Point, center: Point, zoom: number, width: number,
     (pixel[1] - height / 2 - (pixelDelta ? pixelDelta[1] : 0)) / 256.0,
   ]
 
-  const tileX = lng2tile(center[1], zoom) + pointDiff[0]
-  const tileY = lat2tile(center[0], zoom) + pointDiff[1]
+  const tileCoords = latlng2tile(center, zoom)
+
+  const tileX = tileCoords[0] + pointDiff[0]
+  const tileY = tileCoords[1] + pointDiff[1]
+
+  const adjustedLatLng = tile2latlng([tileX, tileY], zoom)
 
   return [
-    Math.max(absoluteMinMax[0], Math.min(absoluteMinMax[1], tile2lat(tileY, zoom))),
-    Math.max(absoluteMinMax[2], Math.min(absoluteMinMax[3], tile2lng(tileX, zoom))),
+    Math.max(absoluteMinMax[0], Math.min(absoluteMinMax[1], adjustedLatLng[1])),
+    Math.max(absoluteMinMax[2], Math.min(absoluteMinMax[3], adjustedLatLng[0])),
   ] as Point
 }
 
 const latLngToPixel = (latLng: Point, center: Point, zoom: number, width: number, height: number, pixelDelta: [number, number]): Point => {
-
-  const tileCenterX = lng2tile(center[1], zoom)
-  const tileCenterY = lat2tile(center[0], zoom)
-
-  const tileX = lng2tile(latLng[1], zoom)
-  const tileY = lat2tile(latLng[0], zoom)
+  const tileCenter = latlng2tile(center, zoom)
+  const tileCoords = latlng2tile(latLng, zoom)
 
   return [
-    (tileX - tileCenterX) * 256.0 + width / 2 + (pixelDelta ? pixelDelta[0] : 0),
-    (tileY - tileCenterY) * 256.0 + height / 2 + (pixelDelta ? pixelDelta[1] : 0),
+    (tileCoords[0] - tileCenter[0]) * 256.0 + width / 2 + (pixelDelta ? pixelDelta[0] : 0),
+    (tileCoords[1] - tileCenter[1]) * 256.0 + height / 2 + (pixelDelta ? pixelDelta[1] : 0),
   ] as Point
 }
 
-const webMercator: Crs = {
-  lng2tile,
-  lat2tile,
-  tile2lng,
-  tile2lat,
+export const webMercator: Crs = {
+  latlng2tile,
+  tile2latlng,
   pixelToLatLng,
   latLngToPixel,
   absoluteMinMax,
 }
-
-export default webMercator;

@@ -16,7 +16,7 @@ import {
   WRem,
 } from '../types'
 import { osm } from '../providers'
-import webMercator from 'crs/webMercator'
+import { webMercator } from 'crs/webMercator'
 
 const ANIMATION_TIME = 300
 const DIAGONAL_THROW_TIME = 1500
@@ -532,11 +532,14 @@ export class Map extends Component<MapProps, MapReactState> {
 
     const pixelsAtZoom = Math.pow(2, zoom) * 256
 
-    const minLng = width > pixelsAtZoom ? 0 : this.props.crs.tile2lng(width / 512, zoom) // x
-    const minLat = height > pixelsAtZoom ? 0 : this.props.crs.tile2lat(Math.pow(2, zoom) - height / 512, zoom) // y
+    const maybeMinLatLng = this.props.crs.tile2latlng([width / 512, Math.pow(2, zoom) - height / 512], zoom)
+    const maybeMaxLatLng = this.props.crs.tile2latlng([Math.pow(2, zoom) - width / 512, height / 512], zoom)
 
-    const maxLng = width > pixelsAtZoom ? 0 : this.props.crs.tile2lng(Math.pow(2, zoom) - width / 512, zoom) // x
-    const maxLat = height > pixelsAtZoom ? 0 : this.props.crs.tile2lat(height / 512, zoom) // y
+    const minLng = width > pixelsAtZoom ? 0 : maybeMinLatLng[1] // x
+    const minLat = height > pixelsAtZoom ? 0 : maybeMinLatLng[0] // y
+
+    const maxLng = width > pixelsAtZoom ? 0 : maybeMaxLatLng[1] // x
+    const maxLat = height > pixelsAtZoom ? 0 : maybeMaxLatLng[0] // y
 
     const minMax = [minLat, maxLat, minLng, maxLng] as MinMaxBounds
 
@@ -866,10 +869,10 @@ export class Map extends Component<MapProps, MapReactState> {
 
         const throwTime = (DIAGONAL_THROW_TIME * distance) / diagonal
 
-        const lng = this.props.crs.tile2lng(this.props.crs.lng2tile(center[1], zoom) - delta[0] / 256.0, zoom)
-        const lat = this.props.crs.tile2lat(this.props.crs.lat2tile(center[0], zoom) - delta[1] / 256.0, zoom)
+        const tileCoords = this.props.crs.latlng2tile(center, zoom)
+        const latLng = this.props.crs.tile2latlng([tileCoords[0] - delta[0] / 256.0, tileCoords[1] - delta[1] / 256.0], zoom)
 
-        this.setCenterZoomTarget([lat, lng], zoom, false, null, throwTime)
+        this.setCenterZoomTarget(latLng, zoom, false, null, throwTime)
       }
     }
 
@@ -883,9 +886,10 @@ export class Map extends Component<MapProps, MapReactState> {
     let lng = center[1]
 
     if (pixelDelta || zoomDelta !== 0) {
-      lng = this.props.crs.tile2lng(this.props.crs.lng2tile(center[1], zoom + zoomDelta) - (pixelDelta ? pixelDelta[0] / 256.0 : 0), zoom + zoomDelta)
-      lat = this.props.crs.tile2lat(this.props.crs.lat2tile(center[0], zoom + zoomDelta) - (pixelDelta ? pixelDelta[1] / 256.0 : 0), zoom + zoomDelta)
-      this.setCenterZoom([lat, lng], zoom + zoomDelta)
+      const tileCoords = this.props.crs.latlng2tile(center, zoom + zoomDelta)
+      const latLng = this.props.crs.tile2latlng([tileCoords[0] - (pixelDelta ? pixelDelta[0] / 256.0 : 0), tileCoords[1] - (pixelDelta ? pixelDelta[1] / 256.0 : 0)], zoom + zoomDelta)
+
+      this.setCenterZoom(latLng, zoom + zoomDelta)
     }
 
     this.setState(
@@ -1049,8 +1053,9 @@ export class Map extends Component<MapProps, MapReactState> {
     const scaleWidth = width / scale
     const scaleHeight = height / scale
 
-    const tileCenterX = this.props.crs.lng2tile(center[1], roundedZoom) - (pixelDelta ? pixelDelta[0] / 256.0 / scale : 0)
-    const tileCenterY = this.props.crs.lat2tile(center[0], roundedZoom) - (pixelDelta ? pixelDelta[1] / 256.0 / scale : 0)
+    const tileCenter = this.props.crs.latlng2tile(center, roundedZoom)
+    const tileCenterX = tileCenter[0] - (pixelDelta ? pixelDelta[0] / 256.0 / scale : 0)
+    const tileCenterY = tileCenter[1] - (pixelDelta ? pixelDelta[1] / 256.0 / scale : 0)
 
     const halfWidth = scaleWidth / 2 / 256.0
     const halfHeight = scaleHeight / 2 / 256.0
@@ -1110,10 +1115,13 @@ export class Map extends Component<MapProps, MapReactState> {
       const xDiff = -(tileMinX - old.tileMinX * pow) * 256
       const yDiff = -(tileMinY - old.tileMinY * pow) * 256
 
-      const xMin = Math.max(old.tileMinX, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], old.roundedZoom)))
-      const yMin = Math.max(old.tileMinY, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], old.roundedZoom)))
-      const xMax = Math.min(old.tileMaxX, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], old.roundedZoom)) - 1)
-      const yMax = Math.min(old.tileMaxY, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], old.roundedZoom)) - 1)
+      const minTileCoords = this.props.crs.latlng2tile([this.props.crs.absoluteMinMax[0], this.props.crs.absoluteMinMax[2]], old.roundedZoom)
+      const maxTileCoords = this.props.crs.latlng2tile([this.props.crs.absoluteMinMax[1], this.props.crs.absoluteMinMax[3]], old.roundedZoom)
+
+      const xMin = Math.max(old.tileMinX, Math.ceil(minTileCoords[0]))
+      const yMin = Math.max(old.tileMinY, Math.ceil(minTileCoords[1]))
+      const xMax = Math.min(old.tileMaxX, Math.floor(maxTileCoords[0]) - 1)
+      const yMax = Math.min(old.tileMaxY, Math.floor(maxTileCoords[1]) - 1)
 
       for (let x = xMin; x <= xMax; x++) {
         for (let y = yMin; y <= yMax; y++) {
@@ -1131,10 +1139,13 @@ export class Map extends Component<MapProps, MapReactState> {
       }
     }
 
-    const xMin = Math.max(tileMinX, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[2], roundedZoom)))
-    const yMin = Math.max(tileMinY, Math.ceil(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[0], roundedZoom)))
-    const xMax = Math.min(tileMaxX, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[3], roundedZoom)) - 1)
-    const yMax = Math.min(tileMaxY, Math.floor(this.props.crs.lng2tile(this.props.crs.absoluteMinMax[1], roundedZoom)) - 1)
+    const minTileCoords = this.props.crs.latlng2tile([this.props.crs.absoluteMinMax[0], this.props.crs.absoluteMinMax[2]], roundedZoom)
+    const maxTileCoords = this.props.crs.latlng2tile([this.props.crs.absoluteMinMax[1], this.props.crs.absoluteMinMax[3]], roundedZoom)
+
+    const xMin = Math.max(tileMinX, Math.ceil(minTileCoords[0]))
+    const yMin = Math.max(tileMinY, Math.ceil(minTileCoords[1]))
+    const xMax = Math.min(tileMaxX, Math.floor(maxTileCoords[0]) - 1)
+    const yMax = Math.min(tileMaxY, Math.floor(maxTileCoords[1]) - 1)
 
     for (let x = xMin; x <= xMax; x++) {
       for (let y = yMin; y <= yMax; y++) {

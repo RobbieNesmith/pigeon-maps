@@ -3,10 +3,8 @@ import React from 'react'
 export type Point = [number, number]
 
 export interface Crs {
-  tile2lng(x: number, z: number): number
-  tile2lat(y: number, z: number): number
-  lng2tile(lng: number, zoom: number): number
-  lat2tile(lat: number, zoom: number): number
+  tile2latlng(tileCoords: Point, z: number): Point
+  latlng2tile(latLng: Point, zoom: number): Point
   pixelToLatLng(pixel: Point, center: Point, zoom: number, width: number, height: number, pixelDelta: [number, number]): Point
   latLngToPixel(latLng: Point, center: Point, zoom: number, width: number, height: number, pixelDelta: [number, number]): Point
   absoluteMinMax: MinMaxBounds
