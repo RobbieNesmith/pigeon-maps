@@ -395,8 +395,8 @@ export class Map extends Component<MapProps, MapReactState> {
     if (
       !this._animationEnd ||
       !this._animationStart ||
-      !this._zoomTarget ||
-      !this._zoomStart ||
+      this._zoomTarget === null ||
+      this._zoomStart === null ||
       !this._centerStart ||
       !this._centerTarget
     ) {
