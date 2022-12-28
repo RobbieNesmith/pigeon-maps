@@ -497,7 +497,7 @@ export class Map extends Component<MapProps, MapReactState> {
       this._loadTracker = loadTracker
     }
 
-    this.setState({ center: limitedCenter, zoom: zoom || this.state.zoom }, NOOP)
+    this.setState({ center: limitedCenter, zoom: zoom ?? this.state.zoom }, NOOP)
 
     const maybeZoom = this.props.zoom ? this.props.zoom : this._lastZoom
     const maybeCenter = this.props.center ? this.props.center : this._lastCenter
