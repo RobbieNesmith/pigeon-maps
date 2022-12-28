@@ -502,7 +502,7 @@ export class Map extends Component<MapProps, MapReactState> {
     const maybeZoom = this.props.zoom ? this.props.zoom : this._lastZoom
     const maybeCenter = this.props.center ? this.props.center : this._lastCenter
     if (
-      zoom &&
+      zoom !== null &&
       (animationEnded ||
         Math.abs(maybeZoom - zoom) > 0.001 ||
         Math.abs(maybeCenter[0] - limitedCenter[0]) > 0.00001 ||
